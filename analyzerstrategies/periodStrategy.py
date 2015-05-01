@@ -3,9 +3,9 @@ Created on Dec 25, 2011
 
 @author: ppa
 '''
-from analyzer.model import Type, Action, Order
-from analyzer.backTest.tickSubscriber.strategies.baseStrategy import BaseStrategy
-from analyzer.backTest.constant import CONF_STRATEGY_PERIOD, CONF_INIT_CASH
+from pyStock.models import Type, Action, Order
+from analyzer.backtest.tickSubscriber.strategies.baseStrategy import BaseStrategy
+from analyzer.backtest.constant import CONF_STRATEGY_PERIOD, CONF_INIT_CASH
 
 import logging
 LOG=logging.getLogger()

@@ -23,13 +23,14 @@ When to Buy:
 
 @author: ppa
 '''
-from analyzer.model import Type, Action, Order
-from analyzer.backTest.tickSubscriber.strategies.baseStrategy import BaseStrategy
-from analyzer.pyTaLib.indicator import Sma, MovingLow
-from analyzer.backTest.constant import CONF_START_TRADE_DATE, CONF_BUYING_RATIO
 import math
-
 import logging
+
+from pyStock.models import Type, Action, Order
+from analyzer.backtest.tickSubscriber.strategies.baseStrategy import BaseStrategy
+from analyzer.backtest.constant import CONF_START_TRADE_DATE, CONF_BUYING_RATIO
+from analyzer.pyTaLib.indicator import Sma, MovingLow
+
 LOG=logging.getLogger()
 
 
