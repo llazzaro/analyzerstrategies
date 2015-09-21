@@ -15,9 +15,9 @@ When to Sell/Buy to cover:
 import math
 import logging
 
-from pyStock.models import Type, Action, Order
+from pyStock.models import Action, Order
 from analyzer.backtest.constant import CONF_START_TRADE_DATE, CONF_BUYING_RATIO
-from analyzer.backtest.tickSubscriber.strategies.baseStrategy import BaseStrategy
+from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
 from analyzer.pyTaLib.indicator import ZScore
 
 LOG=logging.getLogger()
@@ -89,7 +89,7 @@ class OneTraker(object):
         share=math.floor(cash / float(tick.close)) - self.__position
         order=Order(accountId=self.__strategy.accountId,
                          action=Action.BUY,
-                         type=Type.MARKET,
+                         is_market=True,
                          symbol=self.__symbol,
                          share=share)
         if self.__strategy.placeOrder(order):
@@ -103,7 +103,7 @@ class OneTraker(object):
         share=self.__position
         order=Order(accountId=self.__strategy.accountId,
                          action=Action.SELL,
-                         type=Type.MARKET,
+                         is_market=True,
                          symbol=self.__symbol,
                          share=-share)
         if self.__strategy.placeOrder(order):
@@ -119,7 +119,7 @@ class OneTraker(object):
         self.__priceZscore(tick.close)
         self.__volumeZscore(tick.volume)
 
-        #if haven't started, don't do any trading
+        # if haven't started, don't do any trading
         if tick.time <= self.__startDate:
             return
 

@@ -26,8 +26,8 @@ When to Buy:
 import math
 import logging
 
-from pyStock.models import Type, Action, Order
-from analyzer.backtest.tickSubscriber.strategies.baseStrategy import BaseStrategy
+from pyStock.models import Action, Order
+from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
 from analyzer.backtest.constant import CONF_START_TRADE_DATE, CONF_BUYING_RATIO
 from analyzer.pyTaLib.indicator import Sma, MovingLow
 
@@ -87,7 +87,7 @@ class OneTraker(object):
         self.__movingLowShort=MovingLow(10)
         self.__movingLowWeek=MovingLow(3)
 
-        #state of previous day
+        # state of previous day
         self.__previousTick=None
         self.__previousSmaShort=None
         self.__previousMovingLowShort=None
@@ -131,17 +131,17 @@ class OneTraker(object):
         share=math.floor(self.__strategy.getAccountCopy().getCash() / float(tick.close))
         sellShortOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.SELL_SHORT,
-                                  type=Type.MARKET,
+                                  is_market=True,
                                   symbol=self.__symbol,
                                   share=share)
 
         if self.__strategy.placeOrder(sellShortOrder):
             self.__buyOrder=sellShortOrder
 
-            #place stop order
+            # place stop order
             stopOrder=Order(accountId=self.__strategy.accountId,
                           action=Action.BUY_TO_COVER,
-                          type=Type.STOP,
+                          is_stop=True,
                           symbol=self.__symbol,
                           price=tick.close * 1.05,
                           share=0 - share)
@@ -164,16 +164,16 @@ class OneTraker(object):
         share=math.floor(cash / float(tick.close))
         buyOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.BUY,
-                                  type=Type.MARKET,
+                                  is_market=True,
                                   symbol=self.__symbol,
                                   share=share)
         if self.__strategy.placeOrder(buyOrder):
             self.__buyOrder=buyOrder
 
-            #place stop order
+            # place stop order
             stopOrder=Order(accountId=self.__strategy.accountId,
                           action=Action.SELL,
-                          type=Type.STOP,
+                          is_stop=True,
                           symbol=self.__symbol,
                           price=tick.close * 0.95,
                           share=0 - share)
@@ -218,7 +218,7 @@ class OneTraker(object):
                 self.__strategy.tradingEngine.cancelOrder(self.__symbol, self.__stopOrderId)
                 stopOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.SELL,
-                                  type=Type.STOP,
+                                  is_stop=True,
                                   symbol=self.__symbol,
                                   price=newStopPrice,
                                   share=self.__stopOrder.share)
@@ -268,7 +268,7 @@ class OneTraker(object):
             self.__updatePreviousState(tick)
             return
 
-        #if haven't started, don't do any trading
+        # if haven't started, don't do any trading
         if tick.time <= self.__startDate:
             return
 

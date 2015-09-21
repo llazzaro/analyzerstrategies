@@ -26,8 +26,8 @@ When to Buy:
 import math
 import logging
 
-from pyStock.models import Type, Action, Order
-from analyzer.backtest.tickSubscriber.strategies.baseStrategy import BaseStrategy
+from pyStock.models import Action, Order
+from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
 from analyzer.pyTaLib.indicator import Sma
 
 LOG=logging.getLogger()
@@ -90,7 +90,7 @@ class SMAStrategy(BaseStrategy):
         share=math.floor(self.getAccountCopy().getCash() / float(tick.close))
         sellShortOrder=Order(accountId=self.accountId,
                                   action=Action.SELL_SHORT,
-                                  type=Type.MARKET,
+                                  is_market=True,
                                   symbol=symbol,
                                   share=share)
         if self.placeOrder(sellShortOrder):
@@ -99,7 +99,7 @@ class SMAStrategy(BaseStrategy):
             # place stop order
             stopOrder=Order(accountId=self.accountId,
                           action=Action.BUY_TO_COVER,
-                          type=Type.STOP,
+                          is_stop=True,
                           symbol=symbol,
                           price=tick.close * 1.05,
                           share=share)
@@ -110,7 +110,7 @@ class SMAStrategy(BaseStrategy):
         share=math.floor(self.getAccountCopy().getCash() / float(tick.close))
         buyOrder=Order(accountId=self.accountId,
                                   action=Action.BUY,
-                                  type=Type.MARKET,
+                                  is_market=True,
                                   symbol=symbol,
                                   share=share)
         if self.placeOrder(buyOrder):
@@ -119,7 +119,7 @@ class SMAStrategy(BaseStrategy):
             # place stop order
             stopOrder=Order(accountId=self.accountId,
                           action=Action.SELL,
-                          type=Type.STOP,
+                          is_stop=True,
                           symbol=symbol,
                           price=tick.close * 0.95,
                           share=share)
@@ -140,7 +140,7 @@ class SMAStrategy(BaseStrategy):
                 and (self.__smaShort.getLastValue() > self.__smaLong.getLastValue() or self.__smaShort.getLastValue() > self.__smaMid.getLastValue()):
             self.placeOrder(Order(accountId=self.accountId,
                                   action=Action.BUY_TO_COVER,
-                                  type=Type.MARKET,
+                                  is_market=True,
                                   symbol=symbol,
                                   share=self.__stopOrder.share))
             self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
@@ -150,7 +150,7 @@ class SMAStrategy(BaseStrategy):
                 and (self.__smaShort.getLastValue() < self.__smaLong.getLastValue() or self.__smaShort.getLastValue() < self.__smaMid.getLastValue()):
             self.placeOrder(Order(accountId=self.accountId,
                                   action=Action.SELL,
-                                  type=Type.MARKET,
+                                  is_market=True,
                                   symbol=symbol,
                                   share=self.__stopOrder.share))
             self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
@@ -184,7 +184,7 @@ class SMAStrategy(BaseStrategy):
                 self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
                 stopOrder=Order(accountId=self.accountId,
                                   action=Action.SELL,
-                                  type=Type.STOP,
+                                  is_stop=True,
                                   symbol=symbol,
                                   price=newStopPrice,
                                   share=self.__stopOrder.share)
@@ -199,7 +199,7 @@ class SMAStrategy(BaseStrategy):
                 self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
                 stopOrder=Order(accountId=self.accountId,
                                   action=Action.BUY_TO_COVER,
-                                  type=Type.STOP,
+                                  is_stop=True,
                                   symbol=symbol,
                                   price=newStopPrice,
                                   share=self.__stopOrder.share)
