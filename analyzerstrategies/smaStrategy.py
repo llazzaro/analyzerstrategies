@@ -34,18 +34,15 @@ LOG=logging.getLogger()
 
 
 class SMAStrategy(BaseStrategy):
-    ''' period strategy '''
-    def __init__(self, configDict):
-        ''' constructor '''
-        super(SMAStrategy, self).__init__("smaStrategy")
-        self.configDict=configDict
 
-        self.symbols=None
+    def __init__(self, config, symbols):
+        super(SMAStrategy, self).__init__("smaStrategy", symbols)
+        self.config=config
 
         # order id
-        self.__stopOrderId=None
-        self.__stopOrder=None
-        self.__buyOrder=None
+        self.stop_orderrId=None
+        self.stop_orderr=None
+        self.buy_order=None
 
         self.__smaShort=Sma(10)
         self.__smaMid=Sma(60)
@@ -94,7 +91,7 @@ class SMAStrategy(BaseStrategy):
                                   symbol=symbol,
                                   share=share)
         if self.placeOrder(sellShortOrder):
-            self.__buyOrder=sellShortOrder
+            self.buy_order=sellShortOrder
 
             # place stop order
             stopOrder=Order(accountId=self.accountId,
@@ -114,7 +111,7 @@ class SMAStrategy(BaseStrategy):
                                   symbol=symbol,
                                   share=share)
         if self.placeOrder(buyOrder):
-            self.__buyOrder=buyOrder
+            self.buy_order=buyOrder
 
             # place stop order
             stopOrder=Order(accountId=self.accountId,
@@ -129,37 +126,37 @@ class SMAStrategy(BaseStrategy):
         ''' place stop order '''
         orderId=self.placeOrder(order)
         if orderId:
-            self.__stopOrderId=orderId
-            self.__stopOrder=order
+            self.stop_orderrId=orderId
+            self.stop_orderr=order
         else:
             LOG.error("Can't place stop order %s" % order)
 
     def __sellIfMeet(self, tick, symbol):
         ''' place sell order if conditions meet '''
-        if self.__stopOrder.action == Action.BUY_TO_COVER and self.__previousSmaShort < self.__previousSmaMid and self.__previousSmaShort < self.__previousSmaLong\
+        if self.stop_orderr.action == Action.BUY_TO_COVER and self.__previousSmaShort < self.__previousSmaMid and self.__previousSmaShort < self.__previousSmaLong\
                 and (self.__smaShort.getLastValue() > self.__smaLong.getLastValue() or self.__smaShort.getLastValue() > self.__smaMid.getLastValue()):
             self.placeOrder(Order(accountId=self.accountId,
                                   action=Action.BUY_TO_COVER,
                                   is_market=True,
                                   symbol=symbol,
-                                  share=self.__stopOrder.share))
-            self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
+                                  share=self.stop_orderr.share))
+            self.tradingEngine.cancelOrder(symbol, self.stop_orderrId)
             self.__clearStopOrder()
 
-        elif self.__stopOrder.action == Action.SELL and self.__previousSmaShort > self.__previousSmaMid and self.__previousSmaShort > self.__previousSmaLong\
+        elif self.stop_orderr.action == Action.SELL and self.__previousSmaShort > self.__previousSmaMid and self.__previousSmaShort > self.__previousSmaLong\
                 and (self.__smaShort.getLastValue() < self.__smaLong.getLastValue() or self.__smaShort.getLastValue() < self.__smaMid.getLastValue()):
             self.placeOrder(Order(accountId=self.accountId,
                                   action=Action.SELL,
                                   is_market=True,
                                   symbol=symbol,
-                                  share=self.__stopOrder.share))
-            self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
+                                  share=self.stop_orderr.share))
+            self.tradingEngine.cancelOrder(symbol, self.stop_orderrId)
             self.__clearStopOrder()
 
-    def orderExecuted(self, orderDict):
+    def order_executed(self, order):
         ''' call back for executed order '''
-        for orderId in orderDict.keys():
-            if orderId == self.__stopOrderId:
+        for orderId in order.keys():
+            if orderId == self.stop_orderrId:
                 LOG.debug("smaStrategy stop order canceled %s" % orderId)
                 # stop order executed
                 self.__clearStopOrder()
@@ -167,52 +164,52 @@ class SMAStrategy(BaseStrategy):
 
     def __clearStopOrder(self):
         ''' clear stop order status '''
-        self.__stopOrderId=None
-        self.__stopOrder=None
+        self.stop_orderrId=None
+        self.stop_orderr=None
 
     def __adjustStopOrder(self, tick, symbol):
         ''' update stop order if needed '''
-        if not self.__stopOrderId:
+        if not self.stop_orderrId:
             return
 
-        if self.__stopOrder.action == Action.SELL:
-            orgStopPrice=self.__buyOrder.price * 0.95
+        if self.stop_orderr.action == Action.SELL:
+            orgStopPrice=self.buy_order.price * 0.95
             newStopPrice=max(((tick.close + orgStopPrice) / 2), tick.close * 0.85)
             newStopPrice=min(newStopPrice, tick.close * 0.95)
 
-            if newStopPrice > self.__stopOrder.price:
-                self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
+            if newStopPrice > self.stop_orderr.price:
+                self.tradingEngine.cancelOrder(symbol, self.stop_orderrId)
                 stopOrder=Order(accountId=self.accountId,
                                   action=Action.SELL,
                                   is_stop=True,
                                   symbol=symbol,
                                   price=newStopPrice,
-                                  share=self.__stopOrder.share)
+                                  share=self.stop_orderr.share)
                 self.__placeStopOrder(stopOrder)
 
-        elif self.__stopOrder.action == Action.BUY_TO_COVER:
-            orgStopPrice=self.__buyOrder.price * 1.05
+        elif self.stop_orderr.action == Action.BUY_TO_COVER:
+            orgStopPrice=self.buy_order.price * 1.05
             newStopPrice=min(((orgStopPrice + tick.close) / 2), tick.close * 1.15)
             newStopPrice=max(newStopPrice, tick.close * 1.05)
 
-            if newStopPrice < self.__stopOrder.price:
-                self.tradingEngine.cancelOrder(symbol, self.__stopOrderId)
+            if newStopPrice < self.stop_orderr.price:
+                self.tradingEngine.cancelOrder(symbol, self.stop_orderrId)
                 stopOrder=Order(accountId=self.accountId,
                                   action=Action.BUY_TO_COVER,
                                   is_stop=True,
                                   symbol=symbol,
                                   price=newStopPrice,
-                                  share=self.__stopOrder.share)
+                                  share=self.stop_orderr.share)
                 self.__placeStopOrder(stopOrder)
 
-    def updatePreviousState(self, tick):
+    def update_previous_state(self, tick):
         ''' update privous state '''
         self.__previousTick=tick
         self.__previousSmaShort=self.__smaShort.getLastValue()
         self.__previousSmaMid=self.__smaMid.getLastValue()
         self.__previousSmaLong=self.__smaLong.getLastValue()
 
-    def tickUpdate(self, tickDict):
+    def tick_update(self, tickDict):
         ''' consume ticks '''
         assert self.symbols
         assert self.symbols[0] in tickDict.keys()
@@ -231,7 +228,7 @@ class SMAStrategy(BaseStrategy):
             return
 
         # don't have any holdings
-        if not self.__stopOrderId:
+        if not self.stop_orderrId:
             self.__buyIfMeet(tick, symbol)
 
         # already have some holdings
