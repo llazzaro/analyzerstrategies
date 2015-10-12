@@ -25,6 +25,7 @@ When to Buy:
 '''
 import math
 import logging
+from datetime import datetime
 
 from pyStock.models import Action, Order
 from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
@@ -36,40 +37,40 @@ LOG=logging.getLogger()
 
 class SMAPortfolioStrategy(BaseStrategy):
     ''' period strategy '''
-    def __init__(self, configDict):
+    def __init__(self, config, securities):
         ''' constructor '''
-        super(SMAPortfolioStrategy, self).__init__("smaPortfolioStrategy")
+        super(SMAPortfolioStrategy, self).__init__("smaPortfolioStrategy", securities)
         self.__trakers={}
-        self.startDate=int(configDict.get(CONF_START_TRADE_DATE))
-        self.buyingRatio=int(configDict.get(CONF_BUYING_RATIO) if CONF_BUYING_RATIO in configDict else 25)
+        self.start_Date=datetime.strptime(config.get('analyzer', CONF_START_TRADE_DATE), '%d/%m/%Y').date()
+        self.buying_ratio=int(config.get('analyzer', CONF_BUYING_RATIO) or 25)
 
     def __setUpTrakers(self):
-        ''' set symbols '''
-        for symbol in self.symbols:
-            self.__trakers[symbol]=OneTraker(symbol, self, self.buyingRatio)
+        ''' set securities '''
+        for security in self.securities:
+            self.__trakers[security]=OneTraker(security, self, self.buyingRatio)
 
-    def orderExecuted(self, orderDict):
+    def order_executed(self, orderDict):
         ''' call back for executed order '''
         for orderId, order in orderDict.items():
-            if order.symbol in self.__trakers.keys():
-                self.__trakers[order.symbol].orderExecuted(orderId)
+            if order.security in self.__trakers.keys():
+                self.__trakers[order.security].orderExecuted(orderId)
 
-    def tickUpdate(self, tickDict):
+    def tick_update(self, tickDict):
         ''' consume ticks '''
         if not self.__trakers:
             self.__setUpTrakers()
 
-        for symbol, tick in tickDict.items():
-            if symbol in self.__trakers:
-                self.__trakers[symbol].tickUpdate(tick)
+        for security, tick in tickDict.items():
+            if security in self.__trakers:
+                self.__trakers[security].tickUpdate(tick)
 
 
 class OneTraker(object):
     ''' tracker for one stock '''
-    def __init__(self, symbol, strategy, buyingRatio):
+    def __init__(self, security, strategy, buyingRatio):
         ''' constructor '''
 
-        self.__symbol=symbol
+        self.__security=security
         self.__strategy=strategy
         self.__startDate=strategy.startDate
         self.__buyingRatio=buyingRatio
@@ -132,7 +133,7 @@ class OneTraker(object):
         sellShortOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.SELL_SHORT,
                                   is_market=True,
-                                  symbol=self.__symbol,
+                                  security=self.__security,
                                   share=share)
 
         if self.__strategy.placeOrder(sellShortOrder):
@@ -142,7 +143,7 @@ class OneTraker(object):
             stopOrder=Order(accountId=self.__strategy.accountId,
                           action=Action.BUY_TO_COVER,
                           is_stop=True,
-                          symbol=self.__symbol,
+                          security=self.__security,
                           price=tick.close * 1.05,
                           share=0 - share)
             self.__placeStopOrder(stopOrder)
@@ -165,7 +166,7 @@ class OneTraker(object):
         buyOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.BUY,
                                   is_market=True,
-                                  symbol=self.__symbol,
+                                  security=self.__security,
                                   share=share)
         if self.__strategy.placeOrder(buyOrder):
             self.__buyOrder=buyOrder
@@ -174,7 +175,7 @@ class OneTraker(object):
             stopOrder=Order(accountId=self.__strategy.accountId,
                           action=Action.SELL,
                           is_stop=True,
-                          symbol=self.__symbol,
+                          security=self.__security,
                           price=tick.close * 0.95,
                           share=0 - share)
             self.__placeStopOrder(stopOrder)
@@ -215,11 +216,11 @@ class OneTraker(object):
             newStopPrice=min(newStopPrice, tick.close * 0.95)
 
             if newStopPrice > self.__stopOrder.price:
-                self.__strategy.tradingEngine.cancelOrder(self.__symbol, self.__stopOrderId)
+                self.__strategy.tradingEngine.cancelOrder(self.__security, self.__stopOrderId)
                 stopOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.SELL,
                                   is_stop=True,
-                                  symbol=self.__symbol,
+                                  security=self.__security,
                                   price=newStopPrice,
                                   share=self.__stopOrder.share)
                 self.__placeStopOrder(stopOrder)
@@ -230,11 +231,11 @@ class OneTraker(object):
             newStopPrice=max(newStopPrice, tick.close * 1.05)
 
             if newStopPrice < self.__stopOrder.price:
-                self.__strategy.tradingEngine.cancelOrder(self.__symbol, self.__stopOrderId)
+                self.__strategy.tradingEngine.cancelOrder(self.__security, self.__stopOrderId)
                 stopOrder=Order(accountId=self.__strategy.accountId,
                                   action=Action.BUY_TO_COVER,
                                   type=Type.STOP,
-                                  symbol=self.__symbol,
+                                  security=self.__security,
                                   price=newStopPrice,
                                   share=self.__stopOrder.share)
                 self.__placeStopOrder(stopOrder)
@@ -253,7 +254,7 @@ class OneTraker(object):
 
     def tickUpdate(self, tick):
         ''' consume ticks '''
-        LOG.debug("tickUpdate %s with tick %s, price %s" % (self.__symbol, tick.time, tick.close))
+        LOG.debug("tickUpdate %s with tick %s, price %s" % (self.__security, tick.time, tick.close))
         # update sma
         self.__smaShort(tick.close)
         self.__smaMid(tick.close)

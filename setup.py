@@ -24,7 +24,7 @@ test_requirements = [
 
 setup(
     name='analyzerstrategies',
-    version='0.1.4',
+    version='0.1.5',
     description='Strategies for Analyzer',
     long_description=readme + '\n\n' + history,
     author='Leonardo Lazzaro',
