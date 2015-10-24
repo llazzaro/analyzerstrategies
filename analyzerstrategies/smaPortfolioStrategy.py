@@ -40,14 +40,15 @@ class SMAPortfolioStrategy(BaseStrategy):
     def __init__(self, config, securities):
         ''' constructor '''
         super(SMAPortfolioStrategy, self).__init__("smaPortfolioStrategy", securities)
+        self.securities = securities
         self.__trakers={}
-        self.start_Date=datetime.strptime(config.get('analyzer', CONF_START_TRADE_DATE), '%d/%m/%Y').date()
+        self.start_date=datetime.strptime(config.get('analyzer', CONF_START_TRADE_DATE), '%d/%m/%Y').date()
         self.buying_ratio=int(config.get('analyzer', CONF_BUYING_RATIO) or 25)
 
     def __setUpTrakers(self):
         ''' set securities '''
         for security in self.securities:
-            self.__trakers[security]=OneTraker(security, self, self.buyingRatio)
+            self.__trakers[security]=OneTraker(security, self, self.buying_ratio)
 
     def order_executed(self, orderDict):
         ''' call back for executed order '''
@@ -55,7 +56,7 @@ class SMAPortfolioStrategy(BaseStrategy):
             if order.security in self.__trakers.keys():
                 self.__trakers[order.security].orderExecuted(orderId)
 
-    def tick_update(self, tickDict):
+    def update(self, tickDict):
         ''' consume ticks '''
         if not self.__trakers:
             self.__setUpTrakers()
@@ -67,13 +68,13 @@ class SMAPortfolioStrategy(BaseStrategy):
 
 class OneTraker(object):
     ''' tracker for one stock '''
-    def __init__(self, security, strategy, buyingRatio):
+    def __init__(self, security, strategy, buying_ratio):
         ''' constructor '''
 
         self.__security=security
         self.__strategy=strategy
-        self.__startDate=strategy.startDate
-        self.__buyingRatio=buyingRatio
+        self.start_date=strategy.start_date
+        self.buying_ratio=buying_ratio
 
         # order id
         self.__stopOrderId=None
@@ -151,8 +152,8 @@ class OneTraker(object):
     def __getCashToBuyStock(self):
         ''' calculate the amount of money to buy stock '''
         account=self.__strategy.getAccountCopy()
-        if (account.getCash() >= account.getTotalValue() / self.__buyingRatio):
-            return account.getTotalValue() / self.__buyingRatio
+        if (account.getCash() >= account.getTotalValue() / self.buying_ratio):
+            return account.getTotalValue() / self.buying_ratio
         else:
             return 0
 
@@ -270,7 +271,7 @@ class OneTraker(object):
             return
 
         # if haven't started, don't do any trading
-        if tick.time <= self.__startDate:
+        if tick.time <= self.start_date:
             return
 
         # already have some holdings
