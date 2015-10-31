@@ -37,9 +37,9 @@ LOG=logging.getLogger()
 
 class SMAPortfolioStrategy(BaseStrategy):
     ''' period strategy '''
-    def __init__(self, config, securities):
+    def __init__(self, account, config, securities, store):
         ''' constructor '''
-        super(SMAPortfolioStrategy, self).__init__("smaPortfolioStrategy", securities)
+        super(SMAPortfolioStrategy, self).__init__("smaPortfolioStrategy", account)
         self.securities = securities
         self.__trakers={}
         self.start_date=datetime.strptime(config.get('analyzer', CONF_START_TRADE_DATE), '%d/%m/%Y').date()

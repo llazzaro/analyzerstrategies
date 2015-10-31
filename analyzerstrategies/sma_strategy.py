@@ -23,217 +23,98 @@ When to Buy:
 
 @author: ppa
 '''
-import math
+import datetime
 import logging
 
-from pyStock.models import Action, Order
-from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
-from analyzer.pyTaLib.indicator import Sma
+import pandas as pd
+import numpy as np
 
-LOG=logging.getLogger(__name__)
+from pyStock.models import Action
+from analyzer.backtest.constant import (
+    BUY,
+    SELL_SHORT,
+    SELL,
+    BUY_TO_COVER,
+)
+from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
+from pandas_talib import SMA, SETTINGS
+
+SETTINGS.join = False
+log=logging.getLogger(__name__)
 
 
 class SMAStrategy(BaseStrategy):
 
-    def __init__(self, config, securities):
+    def __init__(self, account, config, securities, store):
         super(SMAStrategy, self).__init__("smaStrategy", securities)
         self.config=config
+        self.account = account
 
-        # order id
-        self.stop_orderrId=None
-        self.stop_orderr=None
-        self.buy_order=None
+        self.quotes = pd.DataFrame(columns=('timestamp', 'volume', 'bid', 'ask', 'last', 'high', 'low'))
 
-        self.__smaShort=Sma(10)
-        self.__smaMid=Sma(60)
-        self.__smaLong=Sma(300)
-
-        # state of privious day
-        self.__previousTick=None
-        self.__previousSmaShort=None
-        self.__previousSmaMid=None
-        self.__previousSmaLong=None
-
-    def __buyIfMeet(self, tick, security):
+    def check_buy(self, security):
         ''' place buy order if conditions meet '''
         # place short sell order
-        if (self.__smaShort.getLastValue() < self.__smaLong.getLastValue() or self.__smaMid.getLastValue() < self.__smaLong.getLastValue()):
-            if tick.close / self.__previousTick.close < 0.9:
-                return
+        if (self.sma_short.iloc[-1] < self.sma_long.iloc[-1] or self.sma_mid.iloc[-1] < self.sma_long.iloc[-1]):
 
-            if self.__previousSmaShort > self.__previousSmaLong and self.__smaShort.getLastValue() < self.__smaLong.getLastValue():
-                # assume no commission fee for now
-                self.__placeSellShortOrder(tick, security)
+            # -2 refers to previous value
+            if self.quotes.iloc[-1]['last'] / self.quotes.iloc[-2]['last'] < 0.9:
+                return None
 
-            elif self.__previousSmaLong > self.__previousSmaShort > self.__previousSmaMid and self.__smaLong.getLastValue() > self.__smaMid.getLastValue() > self.__smaShort.getLastValue():
-                # assume no commission fee for now
-                self.__placeSellShortOrder(tick, security)
+            if self.sma_short.iloc[-2] > self.sma_long.iloc[-2] and self.sma_short.iloc[-1] < self.sma_long.iloc[-1]:
+                return SELL_SHORT
+
+            elif self.sma_long.iloc[-2] > self.sma_short.iloc[-2] > self.sma_mid.iloc[-2] and self.sma_long.iloc[-1] > self.sma_mid.iloc[-1] > self.sma_short.iloc[-1]:
+                return SELL_SHORT
 
         # place buy order
-        if (self.__smaShort.getLastValue() > self.__smaLong.getLastValue() or self.__smaMid.getLastValue() > self.__smaLong.getLastValue()):
-            if tick.close / self.__previousTick.close > 1.1:
-                return
+        if (self.sma_short.iloc[-1] > self.sma_long.iloc[-1] or self.sma_mid.iloc[-1] > self.sma_long.iloc[-1]):
+            if self.quotes.iloc[-1]['last'] / self.quotes.iloc[-2]['last'] > 1.1:
+                return None
 
-            if self.__previousSmaShort < self.__previousSmaLong and self.__smaShort.getLastValue() > self.__smaLong.getLastValue():
-                # assume no commission fee for now
-                self.__placeBuyOrder(tick, security)
+            if self.sma_short.iloc[-2] < self.sma_long.iloc[-2]and self.sma_short.iloc[-1] > self.sma_long.iloc[-1]:
+                return BUY
 
-            elif self.__previousSmaLong < self.__previousSmaShort < self.__previousSmaMid and self.__smaLong.getLastValue() < self.__smaMid.getLastValue() < self.__smaShort.getLastValue():
-                # assume no commission fee for now
-                self.__placeBuyOrder(tick, security)
+            elif self.sma_long.iloc[-2] < self.sma_short.iloc[-2] < self.sma_mid.iloc[-2] and self.sma_long.iloc[-1] < self.sma_mid.iloc[-1] < self.sma_short.iloc[-1]:
+                return BUY
 
-    def __placeSellShortOrder(self, tick, security):
-        ''' place short sell order'''
-        share=math.floor(self.getAccountCopy().getCash() / float(tick.close))
-        sellShortOrder=Order(accountId=self.accountId,
-                                  action=Action.SELL_SHORT,
-                                  is_market=True,
-                                  security=symbol,
-                                  share=share)
-        if self.placeOrder(sellShortOrder):
-            self.buy_order=sellShortOrder
-
-            # place stop order
-            stopOrder=Order(accountId=self.accountId,
-                          action=Action.BUY_TO_COVER,
-                          is_stop=True,
-                          security=symbol,
-                          price=tick.close * 1.05,
-                          share=share)
-            self.__placeStopOrder(stopOrder)
-
-    def __placeBuyOrder(self, tick, security):
-        ''' place buy order'''
-        share=math.floor(self.getAccountCopy().getCash() / float(tick.close))
-        buyOrder=Order(accountId=self.accountId,
-                                  action=Action.BUY,
-                                  is_market=True,
-                                  security=symbol,
-                                  share=share)
-        if self.placeOrder(buyOrder):
-            self.buy_order=buyOrder
-
-            # place stop order
-            stopOrder=Order(accountId=self.accountId,
-                          action=Action.SELL,
-                          is_stop=True,
-                          security=symbol,
-                          price=tick.close * 0.95,
-                          share=share)
-            self.__placeStopOrder(stopOrder)
-
-    def __placeStopOrder(self, order):
-        ''' place stop order '''
-        orderId=self.placeOrder(order)
-        if orderId:
-            self.stop_orderrId=orderId
-            self.stop_orderr=order
-        else:
-            LOG.error("Can't place stop order %s" % order)
-
-    def __sellIfMeet(self, tick, security):
+    def check_sell(self, tick, security):
         ''' place sell order if conditions meet '''
-        if self.stop_orderr.action == Action.BUY_TO_COVER and self.__previousSmaShort < self.__previousSmaMid and self.__previousSmaShort < self.__previousSmaLong\
-                and (self.__smaShort.getLastValue() > self.__smaLong.getLastValue() or self.__smaShort.getLastValue() > self.__smaMid.getLastValue()):
-            self.placeOrder(Order(accountId=self.accountId,
-                                  action=Action.BUY_TO_COVER,
-                                  is_market=True,
-                                  security=symbol,
-                                  share=self.stop_orderr.share))
-            self.tradingEngine.cancelOrder(security, self.stop_orderrId)
-            self.__clearStopOrder()
+        if self.stop_order.action == Action.BUY_TO_COVER and self.__previousSmaShort < self.__previousSmaMid and self.__previousSmaShort < self.__previousSmaLong\
+                and (self.sma_short.iloc[-1] > self.sma_long.iloc[-1] or self.sma_short.iloc[-1] > self.sma_mid.iloc[-1]):
+            return BUY_TO_COVER
 
         elif self.stop_orderr.action == Action.SELL and self.__previousSmaShort > self.__previousSmaMid and self.__previousSmaShort > self.__previousSmaLong\
-                and (self.__smaShort.getLastValue() < self.__smaLong.getLastValue() or self.__smaShort.getLastValue() < self.__smaMid.getLastValue()):
-            self.placeOrder(Order(accountId=self.accountId,
-                                  action=Action.SELL,
-                                  is_market=True,
-                                  security=symbol,
-                                  share=self.stop_orderr.share))
-            self.tradingEngine.cancelOrder(security, self.stop_orderrId)
-            self.__clearStopOrder()
-
-    def order_executed(self, order):
-        ''' call back for executed order '''
-        for orderId in order.keys():
-            if orderId == self.stop_orderrId:
-                LOG.debug("smaStrategy stop order canceled %s" % orderId)
-                # stop order executed
-                self.__clearStopOrder()
-                break
-
-    def __clearStopOrder(self):
-        ''' clear stop order status '''
-        self.stop_orderrId=None
-        self.stop_orderr=None
-
-    def __adjustStopOrder(self, tick, security):
-        ''' update stop order if needed '''
-        if not self.stop_orderrId:
-            return
-
-        if self.stop_orderr.action == Action.SELL:
-            orgStopPrice=self.buy_order.price * 0.95
-            newStopPrice=max(((tick.close + orgStopPrice) / 2), tick.close * 0.85)
-            newStopPrice=min(newStopPrice, tick.close * 0.95)
-
-            if newStopPrice > self.stop_orderr.price:
-                self.tradingEngine.cancelOrder(security, self.stop_orderrId)
-                stopOrder=Order(accountId=self.accountId,
-                                  action=Action.SELL,
-                                  is_stop=True,
-                                  security=symbol,
-                                  price=newStopPrice,
-                                  share=self.stop_orderr.share)
-                self.__placeStopOrder(stopOrder)
-
-        elif self.stop_orderr.action == Action.BUY_TO_COVER:
-            orgStopPrice=self.buy_order.price * 1.05
-            newStopPrice=min(((orgStopPrice + tick.close) / 2), tick.close * 1.15)
-            newStopPrice=max(newStopPrice, tick.close * 1.05)
-
-            if newStopPrice < self.stop_orderr.price:
-                self.tradingEngine.cancelOrder(security, self.stop_orderrId)
-                stopOrder=Order(accountId=self.accountId,
-                                  action=Action.BUY_TO_COVER,
-                                  is_stop=True,
-                                  security=symbol,
-                                  price=newStopPrice,
-                                  share=self.stop_orderr.share)
-                self.__placeStopOrder(stopOrder)
-
-    def update_previous_state(self, tick):
-        ''' update privous state '''
-        self.__previousTick=tick
-        self.__previousSmaShort=self.__smaShort.getLastValue()
-        self.__previousSmaMid=self.__smaMid.getLastValue()
-        self.__previousSmaLong=self.__smaLong.getLastValue()
+                and (self.sma_short.iloc[-1] < self.sma_long.iloc[-1] or self.sma_short.iloc[-1] < self.sma_mid.iloc[-1]):
+            return SELL
 
     def update(self, tick):
-        ''' consume ticks '''
-        assert self.securities
-#        assert self.securitys[0] in tickDict.keys()
-        security = self.securities[0]
-#        tick=tickDict[security]
-
-        LOG.debug("tickUpdate security %s with tick %s, price %s" % (security.symbol, tick.time, tick.close))
+        security = tick['security']
+        quote_time = datetime.datetime.fromtimestamp(int(tick['data']['timestamp']))
+        last_price = tick['data']['last']
+        log.debug("tick update security %s with tick %s, price %s" % (security.symbol, quote_time, last_price))
         # update sma
-        self.__smaShort(tick.close)
-        self.__smaMid(tick.close)
-        self.__smaLong(tick.close)
 
-        # if not enough data, skip to reduce risk -- SKIP NEWLY IPOs
-        if not self.__smaLong.getLastValue() or not self.__smaMid.getLastValue() or not self.__smaShort.getLastValue():
-            self.updatePreviousState(tick)
-            return
+        # appending new row to df is not efficient
+        data = tick['data']
+        row = [quote_time, float(data['volume']), float(data['bid']), float(data['ask']), float(data['last']), float(data['high']), float(data['low'])]
+        new_serie = pd.Series(row, index=['datetime', 'volume', 'bid', 'ask', 'last', 'high', 'low'])
+        self.quotes = self.quotes.append(new_serie, ignore_index=True)
 
-        # don't have any holdings
-        if not self.stop_orderrId:
-            self.__buyIfMeet(tick, security)
+        self.sma_short = SMA(self.quotes, timeperiod=10, key='last')
+        self.sma_mid = SMA(self.quotes, timeperiod=60, key='last')
+        self.sma_long = SMA(self.quotes, timeperiod=300, key='last')
+
+        if np.isnan(self.sma_long.iloc[-1]) or np.isnan(self.sma_mid.iloc[-1]) or np.isnan(self.sma_short.iloc[-1]):
+            log.info('not enough data, skip to reduce risk')
+            return None
+
+        action = None
+        if security.symbol not in self.account.holdings:
+            action = self.check_buy(security)
 
         # already have some holdings
         else:
-            self.__sellIfMeet(tick, security)
-            self.__adjustStopOrder(tick, security)
+            action = self.check_sell(security)
 
-        self.updatePreviousState(tick)
+        return action

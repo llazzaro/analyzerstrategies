@@ -15,16 +15,16 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read().replace('.. :changelog:', '')
 
 requirements = [
-    # TODO: put package requirements here
+    'TA-Lib',
+    'pandas_talib',
 ]
 
 test_requirements = [
-    # TODO: put package test requirements here
 ]
 
 setup(
     name='analyzerstrategies',
-    version='0.1.5',
+    version='0.1.6',
     description='Strategies for Analyzer',
     long_description=readme + '\n\n' + history,
     author='Leonardo Lazzaro',
