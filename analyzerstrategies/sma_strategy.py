@@ -23,20 +23,20 @@ When to Buy:
 
 @author: ppa
 '''
-import datetime
 import logging
+import datetime
 
 import pandas as pd
 import numpy as np
 
 from pyStock.models import Action
-from analyzer.backtest.constant import (
+from analyzer.constant import (
     BUY,
     SELL_SHORT,
     SELL,
     BUY_TO_COVER,
 )
-from analyzer.backtest.tick_subscriber.strategies.base_strategy import BaseStrategy
+from analyzer.tick_subscriber.strategies.base_strategy import BaseStrategy
 from pandas_talib import SMA, SETTINGS
 
 SETTINGS.join = False
@@ -45,15 +45,15 @@ log=logging.getLogger(__name__)
 
 class SMAStrategy(BaseStrategy):
 
-    def __init__(self, account, config, securities, store):
-        super(SMAStrategy, self).__init__("smaStrategy", securities)
+    def __init__(self, account, config, library):
+        super(SMAStrategy, self).__init__("smaStrategy", account)
         self.config=config
         self.account = account
+        self.library = library
 
         self.quotes = pd.DataFrame(columns=('timestamp', 'volume', 'bid', 'ask', 'last', 'high', 'low'))
 
     def check_buy(self, security):
-        ''' place buy order if conditions meet '''
         # place short sell order
         if (self.sma_short.iloc[-1] < self.sma_long.iloc[-1] or self.sma_mid.iloc[-1] < self.sma_long.iloc[-1]):
 
@@ -79,7 +79,6 @@ class SMAStrategy(BaseStrategy):
                 return BUY
 
     def check_sell(self, tick, security):
-        ''' place sell order if conditions meet '''
         if self.stop_order.action == Action.BUY_TO_COVER and self.__previousSmaShort < self.__previousSmaMid and self.__previousSmaShort < self.__previousSmaLong\
                 and (self.sma_short.iloc[-1] > self.sma_long.iloc[-1] or self.sma_short.iloc[-1] > self.sma_mid.iloc[-1]):
             return BUY_TO_COVER
@@ -103,7 +102,7 @@ class SMAStrategy(BaseStrategy):
 
         self.sma_short = SMA(self.quotes, timeperiod=10, key='last')
         self.sma_mid = SMA(self.quotes, timeperiod=60, key='last')
-        self.sma_long = SMA(self.quotes, timeperiod=300, key='last')
+        self.sma_long = SMA(self.quotes, timeperiod=200, key='last')
 
         if np.isnan(self.sma_long.iloc[-1]) or np.isnan(self.sma_mid.iloc[-1]) or np.isnan(self.sma_short.iloc[-1]):
             log.info('not enough data, skip to reduce risk')
@@ -117,4 +116,5 @@ class SMAStrategy(BaseStrategy):
         else:
             action = self.check_sell(security)
 
+        log.info('strategy action {0}'.format(action))
         return action
